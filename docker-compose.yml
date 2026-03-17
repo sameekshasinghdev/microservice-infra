@@ -1,0 +1,126 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    # remove MYSQL_USER and MYSQL_PASSWORD for root
+    ports:
+    - "3307:3306"   # use 3307 on host to avoid conflict
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pRoot@7933"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  config-server:
+    #build: ./ConfigServerApplication_
+    image: sam1209/config-server:latest
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  eureka:
+    #build: ./DiscoveryServerApplication_
+    image: sam1209/eureka:latest
+    container_name: eureka
+    ports:
+      - "8761:8761"
+    networks:
+      - microservices-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          
+  api-gateway:
+   # build: ./api-gateway
+    image: sam1209/api-gateway:latest
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka
+      - config-server
+    networks:
+      - microservices-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  auth-service:
+    #build: ./auth-service
+    image: sam1209/auth-service:latest
+    container_name: auth-service
+    ports:
+      - "8090:8090"
+    depends_on:
+      - eureka
+      - config-server
+    networks:
+      - microservices-net
+      
+
+  book-service:
+    #build: ./SpringBootMicroservice
+    image: sam1209/book-service:latest
+    container_name: book-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+  order-service:
+    #build: ./order-service
+    image: sam1209/order-service:latest
+    container_name: order-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+networks:
+  microservices-net:
+    driver: bridge
