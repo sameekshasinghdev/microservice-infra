@@ -4,7 +4,7 @@ services:
     container_name: mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: Root@7933
+      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
     # remove MYSQL_USER and MYSQL_PASSWORD for root
     ports:
     - "3307:3306"   # use 3307 on host to avoid conflict
